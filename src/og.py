@@ -4,12 +4,13 @@ from ta import TextAnalyzer, TextMedicalAnalyzer, TextTranslater
 from trp import *
 
 class OutputGenerator:
-    def __init__(self, response, fileName, forms, tables):
+    def __init__(self, response, fileName, forms, tables, bucketName):
         self.response = response
         self.fileName = fileName
+        self.documentId = fileName.split('-')[0]
         self.forms = forms
         self.tables = tables
-
+        self.bucketName = bucketName
         self.document = Document(self.response)
 
     def _outputWords(self, page, p):
@@ -29,10 +30,14 @@ class OutputGenerator:
 
     def _outputText(self, page, p):
         text = page.text
-        FileHelper.writeToFile("{}-page-{}-text.txt".format(self.fileName, p), text)
+        opath = "analysis/text/{}/page-{}-text.txt".format(self.documentId, p)
+        #FileHelper.writeToFile("{}-page-{}-text.txt".format(self.fileName, p), text)
+        S3Helper.writeToS3(text, self.bucketName, opath)
 
         textInReadingOrder = page.getTextInReadingOrder()
-        FileHelper.writeToFile("{}-page-{}-text-inreadingorder.txt".format(self.fileName, p), textInReadingOrder)
+        opath = "analysis/inreadingorder/{}/page-{}-inreadingorder.txt".format(self.documentId, p)
+        #FileHelper.writeToFile("{}-page-{}-text-inreadingorder.txt".format(self.fileName, p), textInReadingOrder)
+        S3Helper.writeToS3(textInReadingOrder, self.bucketName, opath)
 
     def _outputForm(self, page, p):
         csvData = []
@@ -52,7 +57,9 @@ class OutputGenerator:
                 csvItem.append("")
             csvData.append(csvItem)
         csvFieldNames = ['Key', 'KeyConfidence', 'Value', 'ValueConfidence']
-        FileHelper.writeCSV("{}-page-{}-forms.csv".format(self.fileName, p), csvFieldNames, csvData)
+        opath = "analysis/forms/{}/page-{}-forms.csv".format(self.documentId, p)
+        S3Helper.writeCSV(csvFieldNames, csvData, self.bucketName, opath)
+        #FileHelper.writeCSV("{}-page-{}-forms.csv".format(self.fileName, p), csvFieldNames, csvData)
 
     def _outputTable(self, page, p):
 
@@ -69,23 +76,29 @@ class OutputGenerator:
             csvData.append([])
             csvData.append([])
 
-        FileHelper.writeCSVRaw("{}-page-{}-tables.csv".format(self.fileName, p), csvData)
+        opath = "analysis/tables/{}/page-{}-tables.csv".format(self.documentId, p)
+        S3Helper.writeCSVRaw(csvData, self.bucketName, opath)
+        #FileHelper.writeCSVRaw("{}-page-{}-tables.csv".format(self.fileName, p), csvData)
 
     def run(self):
 
         if(not self.document.pages):
             return
 
-        FileHelper.writeToFile("{}-response.json".format(self.fileName), json.dumps(self.response))
+        opath = "analysis/response/{}/response.json".format(self.documentId)
+        S3Helper.writeToS3(json.dumps(self.response), self.bucketName, opath)
+        #FileHelper.writeToFile("{}-response.json".format(self.fileName), json.dumps(self.response))
 
         print("Total Pages in Document: {}".format(len(self.document.pages)))
 
         p = 1
         for page in self.document.pages:
 
-            FileHelper.writeToFile("{}-page-{}-response.json".format(self.fileName, p), json.dumps(page.blocks))
+            opath = "analysis/response/{}/page-{}-response.json".format(self.documentId, p)
+            S3Helper.writeToS3(json.dumps(page.blocks), self.bucketName, opath)
+            #FileHelper.writeToFile("{}-page-{}-response.json".format(self.fileName, p), json.dumps(page.blocks))
 
-            self._outputWords(page, p)
+            # self._outputWords(page, p)
 
             self._outputText(page, p)
 
@@ -191,35 +204,39 @@ class OutputGenerator:
 
             subText = text[start:end]
 
-            if(insights):
-                self._insights(start, text, sentiment, syntax, entities, keyPhrases, ta)
+            #if(insights):
+            #    self._insights(start, text, sentiment, syntax, entities, keyPhrases, ta)
 
             if(medicalInsights):
                 self._medicalInsights(start, text, medicalEntities, phi, tma)
 
-            if(translate):
-                translation = translation + tt.getTranslation(subText) + "\n"
+            #if(translate):
+            #    translation = translation + tt.getTranslation(subText) + "\n"
 
             start = end
 
-        if(insights):
-            FileHelper.writeCSV("{}-page-{}-insights-sentiment.csv".format(self.fileName, p),
-                            ["Sentiment"], sentiment)
-            FileHelper.writeCSV("{}-page-{}-insights-entities.csv".format(self.fileName, p),
-                            ["Type", "Text", "Score", "BeginOffset", "EndOffset"], entities)
-            FileHelper.writeCSV("{}-page-{}-insights-syntax.csv".format(self.fileName, p),
-                            ["PartOfSpeech-Tag", "PartOfSpeech-Score", "Text", "BeginOffset", "EndOffset"], syntax)
-            FileHelper.writeCSV("{}-page-{}-insights-keyPhrases.csv".format(self.fileName, p),
-                            ["Text", "Score", "BeginOffset", "EndOffset"], keyPhrases)
+        #if(insights):
+        #    FileHelper.writeCSV("{}-page-{}-insights-sentiment.csv".format(self.fileName, p),
+        #                    ["Sentiment"], sentiment)
+        #    FileHelper.writeCSV("{}-page-{}-insights-entities.csv".format(self.fileName, p),
+        #                    ["Type", "Text", "Score", "BeginOffset", "EndOffset"], entities)
+        #    FileHelper.writeCSV("{}-page-{}-insights-syntax.csv".format(self.fileName, p),
+        #                    ["PartOfSpeech-Tag", "PartOfSpeech-Score", "Text", "BeginOffset", "EndOffset"], syntax)
+        #    FileHelper.writeCSV("{}-page-{}-insights-keyPhrases.csv".format(self.fileName, p),
+        #                    ["Text", "Score", "BeginOffset", "EndOffset"], keyPhrases)
 
         if(medicalInsights):
-            FileHelper.writeCSV("{}-page-{}-medical-insights-entities.csv".format(self.fileName, p),
-                            ["Text", "Type", "Trait_List", "Attribute_List", "Category", "Score", "BeginOffset", "EndOffset"], medicalEntities)
 
-            FileHelper.writeToFile("{}-page-{}-medical-insights-phi.json".format(self.fileName, p), json.dumps(phi))
+            opath = "analysis/entities/{}/page-{}-medical-insights-entities.csv".format(self.documentId, p)
+            S3Helper.writeCSV(["Text", "Type", "Trait_List", "Attribute_List", "Category", "Score", "BeginOffset", "EndOffset"],
+                            medicalEntities, self.bucketName, opath)
+            #FileHelper.writeCSV("{}-page-{}-medical-insights-entities.csv".format(self.fileName, p),
+            #                ["Text", "Type", "Trait_List", "Attribute_List", "Category", "Score", "BeginOffset", "EndOffset"], medicalEntities)
 
-        if(translate):
-            FileHelper.writeToFile("{}-page-{}-text-translation.txt".format(self.fileName, p), translation)
+            #FileHelper.writeToFile("{}-page-{}-medical-insights-phi.json".format(self.fileName, p), json.dumps(phi))
+
+        #if(translate):
+        #    FileHelper.writeToFile("{}-page-{}-text-translation.txt".format(self.fileName, p), translation)
 
     def generateInsights(self, insights, medicalInsights, translate, awsRegion):
 

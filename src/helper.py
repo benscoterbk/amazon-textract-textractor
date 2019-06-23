@@ -2,6 +2,7 @@ import boto3
 from botocore.client import Config
 import os
 import csv
+import io
 
 class AwsHelper:
     def getClient(self, name, awsRegion):
@@ -11,6 +12,18 @@ class AwsHelper:
             )
         )
         return boto3.client(name, region_name=awsRegion, config=config)
+
+    def getResource(self, name, awsRegion=None):
+        config = Config(
+            retries = dict(
+                max_attempts = 30
+            )
+        )
+
+        if(awsRegion):
+            return boto3.resource(name, region_name=awsRegion, config=config)
+        else:
+            return boto3.resource(name, config=config)
 
 class S3Helper:
     @staticmethod
@@ -55,6 +68,43 @@ class S3Helper:
                     files.append(docName)
 
         return files
+
+    @staticmethod
+    def writeToS3(content, bucketName, s3FileName, awsRegion=None):
+        s3 = AwsHelper().getResource('s3', awsRegion)
+        object = s3.Object(bucketName, s3FileName)
+        object.put(Body=content)
+
+    @staticmethod
+    def readFromS3(bucketName, s3FileName, awsRegion=None):
+        s3 = AwsHelper().getResource('s3', awsRegion)
+        obj = s3.Object(bucketName, s3FileName)
+        return obj.get()['Body'].read().decode('utf-8')
+
+    @staticmethod
+    def writeCSV(fieldNames, csvData, bucketName, s3FileName, awsRegion=None):
+        csv_file = io.StringIO()
+        #with open(fileName, 'w') as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fieldNames)
+        writer.writeheader()
+
+        for item in csvData:
+            i = 0
+            row = {}
+            for value in item:
+                row[fieldNames[i]] = value
+                i = i + 1
+            writer.writerow(row)
+        S3Helper.writeToS3(csv_file.getvalue(), bucketName, s3FileName)
+
+    @staticmethod
+    def writeCSVRaw(csvData, bucketName, s3FileName):
+        csv_file = io.StringIO()
+        #with open(fileName, 'w') as csv_file:
+        writer = csv.writer(csv_file)
+        for item in csvData:
+            writer.writerow(item)
+        S3Helper.writeToS3(csv_file.getvalue(), bucketName, s3FileName)
 
 class FileHelper:
     @staticmethod

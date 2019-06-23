@@ -106,7 +106,7 @@ class Textractor:
         name, ext = FileHelper.getFileNameAndExtension(document)
         opg = OutputGenerator(response,
                     "{}-{}".format(name, ext),
-                    ips["forms"], ips["tables"])
+                    ips["forms"], ips["tables"], ips["bucketName"])
         opg.run()
 
         if(ips["insights"] or ips["medical-insights"] or ips["translate"]):
