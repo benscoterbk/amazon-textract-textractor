@@ -1,5 +1,5 @@
 import json
-from helper import FileHelper
+from helper import FileHelper, S3Helper
 from ta import TextAnalyzer, TextMedicalAnalyzer, TextTranslater
 from trp import *
 
@@ -25,6 +25,7 @@ class OutputGenerator:
                 csvData.append(csvItem)
         csvFieldNames = ['Word-Id', 'Word-Text']
         FileHelper.writeCSV("{}-page-{}-words.csv".format(self.fileName, p), csvFieldNames, csvData)
+
 
     def _outputText(self, page, p):
         text = page.text
@@ -139,9 +140,24 @@ class OutputGenerator:
         # Entities
         dentities = tma.getMedicalEntities(subText)
         for dent in dentities['Entities']:
+            # Create a list of Attributes
+            Trait_List = []
+            Attribute_List = []
+            for key in dent:
+                if key == 'Traits':
+                    if len(dent[key])>0:
+                        for t in dent[key]:
+                            Trait_List.append(t['Name'])
+                if key == 'Attributes':
+                    if len(dent[key])>0:
+                        for a in dent[key]:
+                            Attribute_List.append(a['Type']+':'+a['Text'])
+
             dentitiesRow = []
             dentitiesRow.append(dent["Text"])
             dentitiesRow.append(dent["Type"])
+            dentitiesRow.append(str(Trait_List))
+            dentitiesRow.append(str(Attribute_List))
             dentitiesRow.append(dent["Category"])
             dentitiesRow.append(dent["Score"])
             dentitiesRow.append(int(dent["BeginOffset"])+start)
@@ -198,7 +214,7 @@ class OutputGenerator:
 
         if(medicalInsights):
             FileHelper.writeCSV("{}-page-{}-medical-insights-entities.csv".format(self.fileName, p),
-                            ["Text", "Type", "Category", "Score", "BeginOffset", "EndOffset"], medicalEntities)
+                            ["Text", "Type", "Trait_List", "Attribute_List", "Category", "Score", "BeginOffset", "EndOffset"], medicalEntities)
 
             FileHelper.writeToFile("{}-page-{}-medical-insights-phi.json".format(self.fileName, p), json.dumps(phi))
 
